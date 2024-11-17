@@ -2,7 +2,7 @@ from distutils.core import setup
 from setuptools import find_packages
 
 setup(
-	name='gkbus',
+	name='gkbus_test',
 	packages=find_packages(),
 	version='0.2.6',
 	description='High-level KWP over K-line/CANbus library',
