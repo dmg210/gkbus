@@ -6,7 +6,8 @@ setup(
 	packages=find_packages(),
 	version='0.2.6',
 	description='High-level KWP over K-line/CANbus library',
-	description_content_type='text/markdown',
+	long_description=open('README.md').read(),
+	long_description_content_type='text/markdown',
 	author='Dante383',
 	install_requires=['scapy==2.5.0', 'pyserial==3.5']
 )
