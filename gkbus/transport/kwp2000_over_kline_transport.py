@@ -10,6 +10,10 @@ class Kwp2000OverKLineTransport (TransportABC):
 	def __init__ (self, hardware: HardwareABC, tx_id: int, rx_id: int) -> None:
 		self.hardware: HardwareABC = hardware
 		self.tx_id, self.rx_id = tx_id, rx_id
+		self.short_header = False
+
+	def set_short_header (self, enabled: bool) -> None:
+		self.short_header = bool(enabled)
 
 	def send_pdu (self, pdu: bytes) -> int:
 		data = self.build_payload(pdu)
@@ -20,6 +24,9 @@ class Kwp2000OverKLineTransport (TransportABC):
 		return bytes_written
 
 	def read_pdu (self) -> bytes:
+		if self.short_header:
+			return self._read_pdu_short_header()
+
 		frame = bytes()
 		data = bytes()
 
@@ -42,6 +49,51 @@ class Kwp2000OverKLineTransport (TransportABC):
 		self.buffer_push(RawPacket(direction=PacketDirection.INCOMING, data=frame, timestamp=int(time.time() * 1000)))
 
 		return data
+
+
+	def _read_pdu_short_header (self) -> bytes:
+		first = self._read(1)
+
+		if len(first) != 1:
+			raise ValueError('Incomplete K-Line short-header frame')
+
+		frame = first
+
+		if first[0] == 0x00:
+			length_byte = self._read(1)
+			if len(length_byte) != 1:
+				raise ValueError('Incomplete K-Line extended length')
+			frame += length_byte
+			data_length = length_byte[0]
+		else:
+			data_length = first[0]
+
+		data_and_checksum = self._read(data_length + 1)
+		frame += data_and_checksum
+
+		if len(data_and_checksum) != data_length + 1:
+			raise ValueError('Incomplete K-Line short-header payload')
+
+		data = data_and_checksum[:-1]
+		received_checksum = data_and_checksum[-1]
+		expected_checksum = self.calculate_checksum(frame[:-1])
+
+		if received_checksum != expected_checksum:
+			raise ValueError(
+				'K-Line checksum mismatch: received 0x{:02X}, expected 0x{:02X}'
+				.format(received_checksum, expected_checksum)
+			)
+
+		self.buffer_push(
+			RawPacket(
+				direction=PacketDirection.INCOMING,
+				data=frame,
+				timestamp=int(time.time() * 1000)
+			)
+		)
+
+		return data
+
 
 	def _write (self, data: bytes) -> int:
 		logger.debug('K-Line sending: {}'.format(' '.join([hex(x) for x in list(data)])))
@@ -75,6 +127,20 @@ class Kwp2000OverKLineTransport (TransportABC):
 
 	def build_payload (self, data: bytes) -> bytes:
 		data_length = len(data)
+
+		if self.short_header:
+			if data_length > 0xFF:
+				raise ValueError(
+					'K-Line short-header payload cannot exceed 255 bytes'
+				)
+
+			if data_length <= 0x7F:
+				payload = bytes([data_length]) + data
+			else:
+				payload = bytes([0x00, data_length]) + data
+
+			payload += self.calculate_checksum(payload).to_bytes(1, 'big')
+			return payload
 
 		if (data_length < 127):
 			counter = 0x80 + data_length
