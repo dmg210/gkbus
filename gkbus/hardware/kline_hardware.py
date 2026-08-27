@@ -25,6 +25,7 @@ class KLineHardware(HardwareABC):
 	def __init__ (self, port: str, baudrate: int = 10400, timeout: float = 2) -> None:
 		self.port, self.baudrate = port, baudrate
 		self.timeout = timeout
+		self.write_delay = 0.1
 		self._port_opened = False
 		self.socket: serial.Serial = None
 
@@ -53,7 +54,8 @@ class KLineHardware(HardwareABC):
 		# we'll get a timeout when trying to start diagnostic session
 		# find out _why_ is it needed - some magic value instead 
 		# of something calculated shouldnt be required here
-		time.sleep((50/1000)*2)
+		if self.write_delay > 0:
+			time.sleep(self.write_delay)
 		data = frame.data
 		bytes_written = self.socket.write(data)
 
@@ -94,6 +96,10 @@ class KLineHardware(HardwareABC):
 	def set_timeout (self, timeout: float) -> Self:
 		self.socket.timeout = timeout
 		self.timeout = timeout
+		return self
+
+	def set_write_delay (self, delay: float) -> Self:
+		self.write_delay = max(0.0, float(delay))
 		return self
 
 	def set_baudrate (self, baudrate: int) -> Self:
