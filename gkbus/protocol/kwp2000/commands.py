@@ -92,10 +92,25 @@ class ReadEcuIdentification(Kwp2000Command):
 class ReadMemoryByAddress(Kwp2000Command):
 	service_identifier = 0x23
 
-	def init (self, offset: int = 0x000000, size: int = 0xFE) -> None:
+	def init(self, offset: int = 0x000000, size: int = 0xFE) -> None:
+		if offset < 0 or offset > 0xFFFFFF:
+			raise ValueError(
+				'ReadMemoryByAddress offset must fit in 24 bits'
+			)
+
+		if size < 1 or size > 0xFE:
+			raise ValueError(
+				'ReadMemoryByAddress size must be 1..0xFE'
+			)
+
 		address = struct.pack('>L', offset)[1:]
 
-		self.set_data(bytes([*address, size]))
+		self.set_data(
+			bytes([
+				*address,
+				size
+			])
+		)  
 
 class ReadStatusOfDTC(Kwp2000Command):
 	service_identifier = 0x01
@@ -148,8 +163,11 @@ class ResponseOnEvent(Kwp2000Command):
 class SecurityAccess(Kwp2000CommandWithSubservices):
 	service_identifier = 0x27
 
-	def request_seed (self, access_level: int = AccessType.PROGRAMMING_REQUEST_SEED.value) -> Self:
-		return self.set_subservice_identifier(access_level)
+	def request_seed (self, access_level: int = AccessType.PROGRAMMING_REQUEST_SEED.value, data: bytes = b'') -> Self:
+		self.set_subservice_identifier(access_level)
+		if data:
+			self.append_data(data)
+		return self
 
 	def send_key (self, key: bytes, access_level: int = AccessType.PROGRAMMING_SEND_KEY.value) -> Self:
 		self.set_subservice_identifier(access_level)
